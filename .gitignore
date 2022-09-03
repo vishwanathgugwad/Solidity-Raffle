@@ -1,5 +1,11 @@
 node_modules
 .env
-.gitignore
-.prettierrc
-.coverage
+coverage
+coverage.json
+typechain
+typechain-types
+deployments
+
+#Hardhat files
+cache
+artifacts
