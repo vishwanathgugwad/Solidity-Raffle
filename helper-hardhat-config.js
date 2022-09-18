@@ -18,7 +18,9 @@ const networkConfig = {
         interval: "30",
     },
 }
+const frontEndContractsFile = "../nextjs-smartcontract-lottery/constants/contractaddress.json"
+const frontEndAbiFile = "../nextjs-smartcontract-lottery/constants/abi.json"
 
 const developmentChains = ["hardhat", "localhost"]
 
-module.exports = { developmentChains, networkConfig }
+module.exports = { developmentChains, networkConfig, frontEndAbiFile, frontEndContractsFile }
