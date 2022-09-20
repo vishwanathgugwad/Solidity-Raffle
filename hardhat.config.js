@@ -39,7 +39,7 @@ module.exports = {
         noColors: true,
     },
     mocha: {
-        timeout: 100000000,
+        timeout: 500000, // 500 seconds max time
     },
     solidity: "0.8.9",
     namedAccounts: {

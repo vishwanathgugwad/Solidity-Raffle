@@ -5,14 +5,17 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
 !developmentChains.includes(network.name)
     ? describe.skip
     : describe("Raffle unit test", () => {
-          let raffle, vrfCoordinatorV2mock, raffleEntranceFee, deployer, interval
-          const chainId = network.config.chainId
+          let raffle, vrfCoordinatorV2mock, raffleEntranceFee, interval, raffleContract
 
           beforeEach(async () => {
-              deployer = (await getNamedAccounts()).deployer
-              await deployments.fixture(["all"])
-              raffle = await ethers.getContract("Raffle", deployer)
-              vrfCoordinatorV2mock = await ethers.getContract("VRFCoordinatorV2Mock", deployer)
+              accounts = await ethers.getSigners() // could also do with getNamedAccounts
+              //   deployer = accounts[0]
+              player = accounts[1]
+
+              await deployments.fixture(["mocks", "raffle"]) // Deploys modules with the tags "mocks" and "raffle"
+              raffleContract = await ethers.getContract("Raffle")
+              raffle = raffleContract.connect(player) // Returns a new instance of the Raffle contract connected to player
+              vrfCoordinatorV2mock = await ethers.getContract("VRFCoordinatorV2Mock")
               raffleEntranceFee = await raffle.getEnterenceFee()
               interval = await raffle.getInterval()
           })
@@ -22,7 +25,10 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
                   //ideally we make our tests have one assert per "it"
                   const raffleState = (await raffle.getRaffleState()).toString()
                   assert.equal(raffleState, "0")
-                  assert.equal(interval.toString(), networkConfig[chainId]["interval"])
+                  assert.equal(
+                      interval.toString(),
+                      networkConfig[network.config.chainId]["interval"]
+                  )
               })
           })
 
@@ -34,8 +40,8 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
               })
               it("records player when they enter", async () => {
                   await raffle.enterRaffle({ value: raffleEntranceFee })
-                  const player = await raffle.getPlayer(0)
-                  assert.equal(player, deployer)
+                  const contractPlayer = await raffle.getPlayer(0)
+                  assert.equal(player.address, contractPlayer)
               })
 
               it("emmits when enter", async () => {
@@ -97,7 +103,10 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
               })
               it("should only be call after performUpkeep", async () => {
                   await expect(
-                      vrfCoordinatorV2Mock.fulfillRandomWords(0, raffle.address)
+                      vrfCoordinatorV2mock.fulfillRandomWords(0, raffle.address)
+                  ).to.be.revertedWith("nonexistent request")
+                  await expect(
+                      vrfCoordinatorV2mock.fulfillRandomWords(1, raffle.address)
                   ).to.be.revertedWith("nonexistent request")
               })
               it("should pick a winner, resets a lottery, and sends funds.", async () => {
@@ -105,25 +114,23 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
                   const startingIndex = 1 // * 0 is deployer index.
                   const accounts = await ethers.getSigners()
                   for (let i = startingIndex; i < startingIndex + additionalEntrances; i++) {
-                      const acccountConnectedRaffle = raffle.connect(accounts[i])
-                      await acccountConnectedRaffle.enterRaffle({
-                          value: raffleEntranceFee,
-                      })
+                      raffle = raffleContract.connect(accounts[i]) // Returns a new instance of the Raffle contract connected to player
+                      await raffle.enterRaffle({ value: raffleEntranceFee })
                   }
                   const startingTimeStamp = await raffle.getLastTimeStamp()
+
                   await new Promise(async (resolve, reject) => {
                       raffle.once("WinnerPicked", async () => {
                           console.log("Winner Picked event fired!")
                           try {
                               const recentWinner = await raffle.getRecentWinner()
-                              // console.log(recentWinner);
-                              // console.log(accounts[0].address);
-                              // console.log(accounts[1].address);
-                              // console.log(accounts[2].address);
-                              // console.log(accounts[3].address);
+
                               const raffleState = await raffle.getRaffleState()
+
                               const endingTimeStamp = await raffle.getLastTimeStamp()
+
                               const numPlayers = await raffle.getNumberOfPlayers()
+
                               const winnerEndingBalance = await accounts[1].getBalance()
                               // * Comparisons to check if our ending values are correct:
                               assert.equal(recentWinner.toString(), accounts[1].address)
@@ -145,12 +152,12 @@ const { developmentChains, networkConfig } = require("../../helper-hardhat-confi
                               reject(e)
                           }
                       })
-                      const tx = await raffle.performUpkeep([])
+                      const tx = await raffle.performUpkeep("0x")
                       const txReceipt = await tx.wait(1)
                       const winnerStartingBalance = await accounts[1].getBalance()
                       // * pretend to be a Chainlink node that will call fulfillRandomWords.
                       // * this function will emit an event that we should listen for in tests before calling this. See above.
-                      await vrfCoordinatorV2Mock.fulfillRandomWords(
+                      await vrfCoordinatorV2mock.fulfillRandomWords(
                           txReceipt.events[1].args.requestId,
                           raffle.address
                       )

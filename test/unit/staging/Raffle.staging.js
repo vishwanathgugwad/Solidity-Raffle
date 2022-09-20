@@ -1,60 +1,49 @@
 const { assert, expect } = require("chai")
-const { getNamedAccounts, deployments, ethers, network } = require("hardhat")
+const { network, getNamedAccounts, deployments, ethers } = require("hardhat")
 const { developmentChains, networkConfig } = require("../../../helper-hardhat-config")
 
 developmentChains.includes(network.name)
     ? describe.skip
-    : describe("Raffle Staging Tests", function () {
-          let raffle, raffleEntranceFee, deployer
+    : describe("Raffle Staging  test", () => {
+          let raffle, raffleEntranceFee, raffleContract
 
-          beforeEach(async function () {
-              deployer = (await getNamedAccounts()).deployer
-              raffle = await ethers.getContract("Raffle", deployer)
+          beforeEach(async () => {
+              accounts = await ethers.getSigners() // could also do with getNamedAccounts
+              //   deployer = accounts[0]
+              player = accounts[0]
+              raffleContract = await ethers.getContract("Raffle")
+              raffle = raffleContract.connect(player) // Returns a new instance of the Raffle contract connected to player
               raffleEntranceFee = await raffle.getEnterenceFee()
+              console.log(player.address)
+              console.log(accounts[1])
           })
 
-          describe("fulfillRandomWords", function () {
-              it("works with live Chainlink Keepers and Chainlink VRF, we get a random winner", async function () {
-                  // enter the raffle
-                  console.log("Setting up test...")
+          describe("FullfillRandomwords", () => {
+              it("works with live chainlink keepers and chainlink VRF , we got  a random winner", async () => {
+                  //enter the raffle
                   const startingTimeStamp = await raffle.getLastTimeStamp()
-                  const accounts = await ethers.getSigners()
-
-                  console.log("Setting up Listener...")
+                  console.log(startingTimeStamp)
                   await new Promise(async (resolve, reject) => {
-                      // setup listener before we enter the raffle
-                      // Just in case the blockchain moves REALLY fast
                       raffle.once("WinnerPicked", async () => {
-                          console.log("WinnerPicked event fired!")
                           try {
-                              // add our asserts here
-                              const recentWinner = await raffle.getRecentWinner()
+                              console.log("winner picked event fired !!")
+                              const getRecentWinner = await raffle.getRecentWinner()
                               const raffleState = await raffle.getRaffleState()
-                              const winnerEndingBalance = await accounts[0].getBalance()
+                              const numPlayers = await raffle.getNumberOfPlayers()
                               const endingTimeStamp = await raffle.getLastTimeStamp()
-
+                              const winnerEndingBalance = await accounts[0].getBalance()
                               await expect(raffle.getPlayer(0)).to.be.reverted
-                              assert.equal(recentWinner.toString(), accounts[0].address)
-                              assert.equal(raffleState, 0)
-                              assert.equal(
-                                  winnerEndingBalance.toString(),
-                                  winnerStartingBalance.add(raffleEntranceFee).toString()
-                              )
+                              assert.equal(getRecentWinner.toString(), accounts[0].address)
                               assert(endingTimeStamp > startingTimeStamp)
                               resolve()
                           } catch (error) {
                               console.log(error)
-                              reject(error)
+                              reject(e)
                           }
                       })
-                      // Then entering the raffle
-                      console.log("Entering Raffle...")
-                      const tx = await raffle.enterRaffle({ value: raffleEntranceFee })
-                      await tx.wait(1)
-                      console.log("Ok, time to wait...")
+                      console.log("Entering the raffle..")
+                      await raffle.enterRaffle({ value: raffleEntranceFee })
                       const winnerStartingBalance = await accounts[0].getBalance()
-
-                      // and this code WONT complete until our listener has finished listening!
                   })
               })
           })

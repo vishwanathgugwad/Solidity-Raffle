@@ -6,6 +6,7 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 // KeeperCompatible.sol imports the functions from both ./KeeperBase.sol and
 // ./interfaces/KeeperCompatibleInterface.sol
 import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
+import "hardhat/console.sol";
 
 error Raffle__NotEnoughETHEntered();
 error Raffle__TransferFailed();
@@ -46,16 +47,16 @@ contract Raffle is VRFConsumerBaseV2, KeeperCompatibleInterface {
     /* Events */
     event RaffleEnter(address indexed player);
     event RequestedRandomWinner(uint256 indexed requestId);
-    event LastWinner(address indexed lastWinner);
+    event WinnerPicked(address indexed player);
 
     /** Functions */
     constructor(
         address vrfCoordinatorV2,
-        uint256 enteranceFee,
-        bytes32 gasLane,
         uint64 subscriptionID,
-        uint32 callBackGasLimit,
-        uint256 interval
+        bytes32 gasLane,
+        uint256 interval,
+        uint256 enteranceFee,
+        uint32 callBackGasLimit
     ) VRFConsumerBaseV2(vrfCoordinatorV2) {
         S_raffleState = RaffleState.OPEN;
         i_gasLane = gasLane;
@@ -114,7 +115,7 @@ contract Raffle is VRFConsumerBaseV2, KeeperCompatibleInterface {
         if (!success) {
             revert Raffle__TransferFailed();
         }
-        emit LastWinner(recentWinner);
+        emit WinnerPicked(recentWinner);
     }
 
     function checkUpkeep(
@@ -128,7 +129,7 @@ contract Raffle is VRFConsumerBaseV2, KeeperCompatibleInterface {
             bytes memory /* performData */
         )
     {
-        bool isOpen = (RaffleState.OPEN == S_raffleState);
+        bool isOpen = RaffleState.OPEN == S_raffleState;
         bool timePassed = ((block.timestamp - s_lastTimeStamp) > i_interval);
         bool hasPlayers = (s_players.length > 0);
         bool hasBalance = address(this).balance > 0;
